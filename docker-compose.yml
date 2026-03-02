@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  balance-service:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - BALANCE_REDIS_HOST=redis
+      - BALANCE_REDIS_PORT=6379
+      - BALANCE_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - BALANCE_RABBITMQ_BALANCE_COMPLETED_QUEUE=balance.completed
+      - BALANCE_RABBITMQ_BALANCE_FAILED_QUEUE=balance.failed
+      - BALANCE_BALANCE_TTL=86400
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - balance-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - balance-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - balance-network
+
+networks:
+  balance-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  rabbitmq-data:

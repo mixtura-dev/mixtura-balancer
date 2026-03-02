@@ -1,0 +1,67 @@
+[build-system]
+requires = ["scikit-build-core", "pybind11", "cmake"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "balance-engine"
+version = "1.0.0"
+description = "Fast C++ balance engine for game team distribution"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Team", email = "your.email@example.com"}
+]
+keywords = ["balance", "game", "team", "distribution", "c++"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: C++",
+    "Topic :: Games/Entertainment",
+]
+dependencies = [
+    "pybind11>=2.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Repository = "https://github.com/yourusername/balance-engine"
+Documentation = "https://github.com/yourusername/balance-engine/blob/main/README.md"
+
+[tool.scikit-build]
+cmake.version = ">=3.12"
+cmake.build-type = "Release"
+wheel.packages = ["balance_engine"]
+sdist.include = ["CMakeLists.txt", "pybind11_bindings.cpp", "balance_engine.cpp", "balance_engine.hpp"]
+
+[tool.scikit-build.cmake.define]
+# Enable optimizations
+CMAKE_INTERPROCEDURAL_OPTIMIZATION = "ON"
+# Use minimum Python version for compatibility
+PYTHON_VERSION_MIN_MINOR = "1"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "W293"]  # Line too long (handled by black)
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
