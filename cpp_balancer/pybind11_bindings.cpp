@@ -9,7 +9,7 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Balance Engine - optimized team balancing module";
 
-    // ==================== RoleRating (было PlayerRoleInfo) ====================
+    // ==================== RoleRating ====================
     py::class_<RoleRating>(m, "RoleRating")
         .def(py::init<>())
         .def(py::init([](int role_id, int rating, int priority) {
@@ -40,8 +40,7 @@ PYBIND11_MODULE(_core, m)
         .def("get_priority_for_role", &PlayerInfo::get_priority_for_role, py::arg("role_id"))
         .def("__repr__", [](const PlayerInfo& p) {
             return "PlayerInfo(member_id=" + std::to_string(p.member_id) + 
-                   ", roles=[" + std::to_string(p.roles.size()) + " roles]" +
-                   ")";
+                   ", roles=[" + std::to_string(p.roles.size()) + " roles])";
         });
 
     // ==================== RoleConstraint ====================
@@ -81,7 +80,29 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__", [](const QualitySettings& s) {
             return "QualitySettings(alpha=" + std::to_string(s.alpha) +
                    ", beta=" + std::to_string(s.beta) +
-                   ", gamma=" + std::to_string(s.gamma) + ")";
+                   ", gamma=" + std::to_string(s.gamma) +
+                   ", xi=" + std::to_string(s.xi) + ")";
+        });
+
+    // ==================== EngineSettings ====================
+    py::class_<EngineSettings>(m, "EngineSettings")
+        .def(py::init<>())
+        .def_readwrite("num_workers", &EngineSettings::num_workers,
+            "Number of worker threads (0 = auto-detect)")
+        .def_readwrite("fallback_workers", &EngineSettings::fallback_workers,
+            "Fallback worker count if auto-detect fails")
+        .def_readwrite("worker_result_buffer", &EngineSettings::worker_result_buffer,
+            "Extra buffer per worker for results")
+        .def_readwrite("max_players", &EngineSettings::max_players,
+            "Maximum players supported (due to bitmask, max 32)")
+        .def_readwrite("mask_reserve_limit", &EngineSettings::mask_reserve_limit,
+            "Limit for mask pre-allocation exponent")
+        .def_readwrite("priority_imbalance_threshold", &EngineSettings::priority_imbalance_threshold,
+            "Imbalance must exceed this to apply penalty")
+        .def("__repr__", [](const EngineSettings& s) {
+            return "EngineSettings(num_workers=" + std::to_string(s.num_workers) +
+                   ", fallback_workers=" + std::to_string(s.fallback_workers) +
+                   ", max_players=" + std::to_string(s.max_players) + ")";
         });
 
     // ==================== QualityMetrics ====================
@@ -120,7 +141,6 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("member_id", &TeamPlayerResult::member_id)
         .def_readwrite("role_id", &TeamPlayerResult::role_id)
         .def_readwrite("rating", &TeamPlayerResult::rating)
-        // Backwards compatibility aliases
         .def_property("game_role_id",
             [](const TeamPlayerResult& t) { return t.role_id; },
             [](TeamPlayerResult& t, int v) { t.role_id = v; },
@@ -139,7 +159,6 @@ PYBIND11_MODULE(_core, m)
         }), py::arg("name"), py::arg("players"))
         .def_readwrite("name", &TeamResult::name)
         .def_readwrite("players", &TeamResult::players)
-        // Backwards compatibility alias
         .def_property("team_id",
             [](const TeamResult& t) { return t.name; },
             [](TeamResult& t, const std::string& v) { t.name = v; },
@@ -154,14 +173,8 @@ PYBIND11_MODULE(_core, m)
         .def(py::init<>())
         .def_readwrite("quality", &BalanceResultData::quality)
         .def_readwrite("teams", &BalanceResultData::teams)
-        .def_readwrite("team_mask", &BalanceResultData::team_mask)
-        .def_readwrite("role_mask1", &BalanceResultData::role_mask1)
-        .def_readwrite("role_mask2", &BalanceResultData::role_mask2)
         .def("to_dict", [](const BalanceResultData& r) {
             py::dict d;
-            d["team_mask"] = r.team_mask;
-            d["role_mask1"] = r.role_mask1;
-            d["role_mask2"] = r.role_mask2;
             d["fairness"] = r.quality.fairness;
             d["role_fairness"] = r.quality.role_fairness;
             d["role_points"] = r.quality.role_points;
@@ -170,8 +183,7 @@ PYBIND11_MODULE(_core, m)
             return d;
         }, "Convert to dictionary format")
         .def("__repr__", [](const BalanceResultData& r) {
-            return "BalanceResultData(total=" + std::to_string(r.quality.total()) +
-                   ", team_mask='" + r.team_mask + "')";
+            return "BalanceResultData(total=" + std::to_string(r.quality.total()) + ")";
         });
 
     // ==================== BalanceResponse ====================
@@ -204,9 +216,6 @@ PYBIND11_MODULE(_core, m)
             py::list balances_list;
             for (const auto& b : r.balances) {
                 py::dict bd;
-                bd["team_mask"] = b.team_mask;
-                bd["fMask"] = b.role_mask1;
-                bd["sMask"] = b.role_mask2;
                 bd["dpFairness"] = std::round(b.quality.fairness * 100) / 100;
                 bd["rgRolesFairness"] = std::round(b.quality.role_fairness * 100) / 100;
                 bd["teamRolePriority"] = std::round(b.quality.role_points * 100) / 100;
@@ -227,23 +236,27 @@ PYBIND11_MODULE(_core, m)
     py::class_<BalanceEngine>(m, "BalanceEngine")
         .def(py::init<const QualitySettings&, 
                       const std::vector<int>&,
-                      const std::unordered_map<int, RoleConstraint>&>(),
-             py::arg("settings"),
+                      const std::unordered_map<int, RoleConstraint>&,
+                      const EngineSettings&>(),
+             py::arg("quality_settings"),
              py::arg("role_ids"),
              py::arg("role_constraints"),
+             py::arg("engine_settings") = EngineSettings{},
              R"doc(
                 Create a new BalanceEngine instance.
                 
                 Args:
-                    settings: QualitySettings for balance calculations
+                    quality_settings: QualitySettings for balance calculations
                     role_ids: List of role IDs (e.g., [0, 1, 2] for Tank, DPS, Healer)
                     role_constraints: Dict mapping role_id to RoleConstraint
+                    engine_settings: EngineSettings for threading and memory tuning
              )doc")
         .def("find_balances", &BalanceEngine::find_balances,
              py::arg("players"),
              py::arg("team_size"),
              py::arg("balance_limit"),
              py::arg("max_results") = 1000,
+             py::call_guard<py::gil_scoped_release>(),
              R"doc(
                 Find all valid team balances.
                 
@@ -256,20 +269,26 @@ PYBIND11_MODULE(_core, m)
                 Returns:
                     BalanceResponse with sorted balance results
              )doc")
-        .def("__repr__", [](const BalanceEngine&) {
-            return "BalanceEngine()";
+        .def_property_readonly("quality_settings", &BalanceEngine::quality_settings,
+            "Get quality settings")
+        .def_property_readonly("engine_settings", &BalanceEngine::engine_settings,
+            "Get engine settings")
+        .def("__repr__", [](const BalanceEngine& e) {
+            return "BalanceEngine(workers=" + 
+                   std::to_string(e.engine_settings().num_workers) + ")";
         });
 
-    // ==================== Module-level convenience function ====================
+    // ==================== Module-level convenience functions ====================
     m.def("find_balances",
         [](const std::vector<PlayerInfo>& players,
            const std::vector<int>& role_ids,
            const std::unordered_map<int, RoleConstraint>& role_constraints,
            int team_size,
            float balance_limit,
-           const QualitySettings& settings,
+           const QualitySettings& quality_settings,
+           const EngineSettings& engine_settings,
            int max_results) {
-            BalanceEngine engine(settings, role_ids, role_constraints);
+            BalanceEngine engine(quality_settings, role_ids, role_constraints, engine_settings);
             return engine.find_balances(players, team_size, balance_limit, max_results);
         },
         py::arg("players"),
@@ -277,7 +296,8 @@ PYBIND11_MODULE(_core, m)
         py::arg("role_constraints"),
         py::arg("team_size"),
         py::arg("balance_limit"),
-        py::arg("settings") = QualitySettings{},
+        py::arg("quality_settings") = QualitySettings{},
+        py::arg("engine_settings") = EngineSettings{},
         py::arg("max_results") = 1000,
         py::call_guard<py::gil_scoped_release>(),
         R"doc(
@@ -290,16 +310,16 @@ PYBIND11_MODULE(_core, m)
             GIL is released during computation for better concurrency.
         )doc");
 
-    // ==================== Async version for thread pools ====================
     m.def("async_find_balances",
         [](const std::vector<PlayerInfo>& players,
            const std::vector<int>& role_ids,
            const std::unordered_map<int, RoleConstraint>& role_constraints,
            int team_size,
            float balance_limit,
-           const QualitySettings& settings,
+           const QualitySettings& quality_settings,
+           const EngineSettings& engine_settings,
            int max_results) {
-            BalanceEngine engine(settings, role_ids, role_constraints);
+            BalanceEngine engine(quality_settings, role_ids, role_constraints, engine_settings);
             return engine.find_balances(players, team_size, balance_limit, max_results);
         },
         py::arg("players"),
@@ -307,15 +327,15 @@ PYBIND11_MODULE(_core, m)
         py::arg("role_constraints"),
         py::arg("team_size"),
         py::arg("balance_limit"),
-        py::arg("settings") = QualitySettings{},
+        py::arg("quality_settings") = QualitySettings{},
+        py::arg("engine_settings") = EngineSettings{},
         py::arg("max_results") = 1000,
         py::call_guard<py::gil_scoped_release>(),
         "Alias for find_balances with GIL release (for backwards compatibility)");
 
     // ==================== Helper factory functions ====================
     m.def("create_player",
-        [](int member_id, 
-           const std::vector<std::tuple<int, int, int>>& roles) {
+        [](int member_id, const std::vector<std::tuple<int, int, int>>& roles) {
             PlayerInfo p;
             p.member_id = member_id;
             for (const auto& [role_id, rating, priority] : roles) {
@@ -333,10 +353,10 @@ PYBIND11_MODULE(_core, m)
                 roles: List of (role_id, rating, priority) tuples
             
             Example:
-                player = create_player(1, [(0, 2500, 3), (1, 2400, 2)], False)
+                player = create_player(1, [(0, 2500, 3), (1, 2400, 2)])
         )doc");
 
-    m.def("create_settings",
+    m.def("create_quality_settings",
         [](float alpha, float beta, float gamma, float xi,
            float p, float q, float g,
            int max_priority,
@@ -363,4 +383,53 @@ PYBIND11_MODULE(_core, m)
         py::arg("max_priority") = 3,
         py::arg("role_weights") = std::unordered_map<int, float>{},
         "Create QualitySettings with all parameters");
+
+    m.def("create_engine_settings",
+        [](int num_workers, int fallback_workers, int worker_result_buffer,
+           int max_players, int mask_reserve_limit, int priority_imbalance_threshold) {
+            EngineSettings s;
+            s.num_workers = num_workers;
+            s.fallback_workers = fallback_workers;
+            s.worker_result_buffer = worker_result_buffer;
+            s.max_players = max_players;
+            s.mask_reserve_limit = mask_reserve_limit;
+            s.priority_imbalance_threshold = priority_imbalance_threshold;
+            return s;
+        },
+        py::arg("num_workers") = 0,
+        py::arg("fallback_workers") = 4,
+        py::arg("worker_result_buffer") = 1000,
+        py::arg("max_players") = 32,
+        py::arg("mask_reserve_limit") = 20,
+        py::arg("priority_imbalance_threshold") = 1,
+        "Create EngineSettings with all parameters");
+
+    // Backwards compatibility alias
+    m.def("create_settings", 
+        [](float alpha, float beta, float gamma, float xi,
+           float p, float q, float g,
+           int max_priority,
+           const std::unordered_map<int, float>& role_weights) {
+            QualitySettings s;
+            s.alpha = alpha;
+            s.beta = beta;
+            s.gamma = gamma;
+            s.xi = xi;
+            s.p = p;
+            s.q = q;
+            s.g = g;
+            s.max_priority = max_priority;
+            s.role_weights = role_weights;
+            return s;
+        },
+        py::arg("alpha") = 1.0f,
+        py::arg("beta") = 1.0f,
+        py::arg("gamma") = 1.0f,
+        py::arg("xi") = 0.2f,
+        py::arg("p") = 1.0f,
+        py::arg("q") = 1.0f,
+        py::arg("g") = 1.0f,
+        py::arg("max_priority") = 3,
+        py::arg("role_weights") = std::unordered_map<int, float>{},
+        "Create QualitySettings (backwards compatibility alias for create_quality_settings)");
 }

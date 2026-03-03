@@ -38,11 +38,11 @@ def convert_request_to_models(request: BalanceRequest) -> tuple[list[Player], Ba
             for role_id, rs in request.settings.roles.items()
         },
         math=MathSettings(
-            alpha=request.settings.math.alpha,
-            beta=request.settings.math.beta,
-            gamma=request.settings.math.gamma,
-            p=request.settings.math.p,
-            q=request.settings.math.q,
+            fairness_coef=request.settings.math.fairness_coef,
+            role_fairness_coef=request.settings.math.role_fairness_coef,
+            role_priority_coef=request.settings.math.role_priority_coef,
+            fairness_power_coef=request.settings.math.fairness_power,
+            uniformity_power_coef=request.settings.math.uniformity_power,
         ),
         balance_limit=request.settings.balance_limit,
     )

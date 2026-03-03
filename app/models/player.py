@@ -12,7 +12,7 @@ class PlayerRole(BaseModel):
 class Player(BaseModel):
     """Модель игрока"""
 
-    member_id: str = Field(description="ID участника")
+    member_id: UUID = Field(description="ID участника")
     roles: dict[UUID, PlayerRole] = Field(description="Роли игрока: UUID роли -> данные роли")
 
     def can_play_role(self, role_id: UUID) -> bool:

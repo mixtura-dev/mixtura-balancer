@@ -22,12 +22,12 @@ class RoleSettings(BaseModel):
 class MathSettings(BaseModel):
     """Математические настройки расчёта баланса"""
 
-    alpha: float = Field(default=1.0, ge=0, description="Вес fairness")
-    beta: float = Field(default=1.0, ge=0, description="Вес role fairness")
-    gamma: float = Field(default=1.0, ge=0, description="Вес role priority")
-    xi: float = Field(default=0.2, ge=0, description="Вес штрафа за дисбаланс приоритетов")
-    p: float = Field(default=2.0, ge=1, description="Степень для fairness")
-    q: float = Field(default=2.0, ge=1, description="Степень для uniformity")
+    fairness_coef: float = Field(default=1.0, ge=0, description="Вес fairness")
+    role_fairness_coef: float = Field(default=1.0, ge=0, description="Вес role fairness")
+    role_priority_coef: float = Field(default=1.0, ge=0, description="Вес role priority")
+    role_priority_imbalance_coef: float = Field(default=0.2, ge=0, description="Вес штрафа за дисбаланс приоритетов")
+    fairness_power_coef: float = Field(default=2.0, ge=1, description="Степень для fairness")
+    uniformity_power_coef: float = Field(default=2.0, ge=1, description="Степень для uniformity")
 
 
 class BalanceSettings(BaseModel):

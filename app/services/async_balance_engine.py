@@ -3,11 +3,7 @@ Async Python wrapper for C++ balance engine.
 Provides awaitable interface for balance calculation without blocking the event loop.
 """
 
-import asyncio
 import logging
-import time
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 from uuid import UUID
 
 import balance_engine
@@ -20,21 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncBalanceEngine:
-    """Async wrapper for C++ balance engine"""
-
-    def __init__(self, max_workers: int = 4):
-        """
-        Initialize async balance engine.
-
-        Args:
-            max_workers: Maximum number of worker threads for C++ computations
-        """
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
-
-    def __del__(self):
-        """Cleanup executor"""
-        self.executor.shutdown(wait=True)
-
     async def find_balances_async(
         self, players: list[Player], settings: BalanceSettings
     ) -> list[BalanceResult]:
@@ -46,13 +27,13 @@ class AsyncBalanceEngine:
         try:
             # Set quality settings in C++ engine
             quality_settings = balance_engine.QualitySettings()
-            quality_settings.alpha = settings.math.alpha
-            quality_settings.beta = settings.math.beta
-            quality_settings.gamma = settings.math.gamma
-            quality_settings.xi = settings.math.xi
-            quality_settings.p = settings.math.p
-            quality_settings.q = settings.math.q
-            quality_settings.g = settings.math.p
+            quality_settings.fairness_coef = settings.math.fairness_coef
+            quality_settings.role_fairness_coef = settings.math.role_fairness_coef
+            quality_settings.role_priority_coef = settings.math.role_priority_coef
+            quality_settings.imbalance_role_priority_coef = settings.math.role_priority_imbalance_coef
+            quality_settings.fairness_power = settings.math.fairness_power_coef
+            quality_settings.uniformity_power = settings.math.uniformity_power_coef
+            quality_settings.role_fairness_power = settings.math.fairness_power_coef
             quality_settings.max_priority = 3  # Default max priority
 
             # Convert Python objects to C++ structures (UUID conversion is automatic)
@@ -61,13 +42,13 @@ class AsyncBalanceEngine:
             role_constraints = self._convert_constraints_to_cpp(settings)
 
             # Call C++ engine with wrapped API (handles UUID automatically)
-            result = await balance_engine.async_find_balances(
+            result = await balance_engine.BalanceEngine.async_quick_find_balances(
                 players_for_engine,
                 role_ids,
                 role_constraints,
                 settings.max_in_team,
                 settings.balance_limit,
-                settings=quality_settings
+                quality_settings=quality_settings
             )
 
             # Convert wrapper result to Python BalanceResult (UUID already handled)

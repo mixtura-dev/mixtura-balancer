@@ -16,6 +16,12 @@ class Settings(BaseSettings):
 
     # RabbitMQ
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+    # Request queues
+    rabbitmq_balance_queue: str = "balance.request"
+    rabbitmq_balance_results_queue: str = "balance.results.request"
+    rabbitmq_best_balance_queue: str = "balance.best.request"
+    # Response queues
+    rabbitmq_balance_response_queue: str = "balance.response"
     rabbitmq_balance_completed_queue: str = "balance.completed"
     rabbitmq_balance_failed_queue: str = "balance.failed"
 

@@ -14,11 +14,11 @@ Features:
 Simple API:
     # One-shot usage
     response = BalanceEngine.quick_find(players, role_ids, constraints, team_size, limit)
-    
+
     # Reusable engine (recommended for repeated calls)
     engine = BalanceEngine(settings, role_ids, constraints)
     response = engine.find_balances(players, team_size, limit)
-    
+
     # Async usage
     response = await async_find_balances(players, role_ids, constraints, team_size, limit)
 
@@ -27,6 +27,7 @@ UUID conversion to/from int is handled internally.
 """
 
 from __future__ import annotations
+
 from uuid import UUID
 
 __version__ = "2.0.0"
@@ -37,7 +38,7 @@ try:
     from . import _core
 except ImportError as e:
     import sys
-    
+
     _import_error_msg = (
         f"Could not import the compiled C++ balance_engine module: {e}\n\n"
         "Possible solutions:\n"
@@ -54,24 +55,19 @@ except ImportError as e:
 
 # Import data models
 from .models import (
-    PlayerRoleInfo,
+    BalanceResponse,
+    BalanceResultData,
     PlayerInfo,
+    PlayerRoleInfo,
+    QualityMetrics,
+    QualitySettings,
     RoleConstraint,
     TeamPlayerResult,
     TeamResult,
-    QualityMetrics,
-    BalanceResultData,
-    BalanceResponse,
-    QualitySettings,
 )
 
 # Import main wrapper
-from .wrapper import (
-    BalanceEngine,
-    UUIDMapper,
-    async_find_balances,
-    async_find_balances_with_engine,
-)
+from .wrapper import BalanceEngine, UUIDMapper
 
 
 def get_version() -> str:
@@ -82,37 +78,37 @@ def get_version() -> str:
 def get_cpp_version() -> str:
     """
     Return the C++ module version if available.
-    
+
     Returns:
         Version string or 'unknown' if not available.
     """
-    return getattr(_core, '__version__', 'unknown')
+    return getattr(_core, "__version__", "unknown")
 
 
 def check_installation() -> dict[str, bool | str]:
     """
     Check if the package is properly installed.
-    
+
     Returns:
         Dict with installation status information.
     """
     result = {
-        'installed': True,
-        'python_version': __version__,
-        'cpp_module_loaded': False,
-        'cpp_version': 'unknown',
-        'error': None,
+        "installed": True,
+        "python_version": __version__,
+        "cpp_module_loaded": False,
+        "cpp_version": "unknown",
+        "error": None,
     }
-    
+
     try:
         # Try to use the C++ module
         _ = _core.QualitySettings()
-        result['cpp_module_loaded'] = True
-        result['cpp_version'] = get_cpp_version()
+        result["cpp_module_loaded"] = True
+        result["cpp_version"] = get_cpp_version()
     except Exception as e:
-        result['cpp_module_loaded'] = False
-        result['error'] = str(e)
-    
+        result["cpp_module_loaded"] = False
+        result["error"] = str(e)
+
     return result
 
 
@@ -124,15 +120,15 @@ def create_player(
 ) -> PlayerInfo:
     """
     Create a PlayerInfo from tuple data.
-    
+
     Args:
         member_id: Player's unique ID
         roles: List of (role_uuid, rating, priority) tuples
         is_flex: Whether player can play any role
-    
+
     Returns:
         PlayerInfo instance
-    
+
     Example:
         >>> import uuid
         >>> TANK = uuid.uuid4()
@@ -140,10 +136,7 @@ def create_player(
     """
     return PlayerInfo(
         member_id=member_id,
-        roles=[
-            PlayerRoleInfo(role_id=r[0], rating=r[1], priority=r[2])
-            for r in roles
-        ],
+        roles=[PlayerRoleInfo(role_id=r[0], rating=r[1], priority=r[2]) for r in roles],
         is_flex=is_flex,
     )
 
@@ -160,7 +153,7 @@ def create_settings(
 ) -> QualitySettings:
     """
     Create QualitySettings with all parameters.
-    
+
     Args:
         alpha: Weight for fairness metric (default: 1.0)
         beta: Weight for role fairness metric (default: 1.0)
@@ -170,17 +163,17 @@ def create_settings(
         g: Power for role fairness norm calculation (default: 1.0)
         max_priority: Maximum role priority value (default: 3)
         role_weights: Weight multipliers for each role {role_uuid: weight}
-    
+
     Returns:
         QualitySettings instance
     """
     return QualitySettings(
-        alpha=alpha,
-        beta=beta,
-        gamma=gamma,
-        p=p,
-        q=q,
-        g=g,
+        fairness_coef=alpha,
+        role_fairness_coef=beta,
+        role_priority_coef=gamma,
+        fairness_power=p,
+        uniformity_power=q,
+        role_fairness_power=g,
         max_priority=max_priority,
         role_weights=role_weights,
     )
@@ -192,15 +185,9 @@ __all__ = [
     "get_version",
     "get_cpp_version",
     "check_installation",
-    
     # Main API
     "BalanceEngine",
     "UUIDMapper",
-    
-    # Async API
-    "async_find_balances",
-    "async_find_balances_with_engine",
-    
     # Data models
     "PlayerRoleInfo",
     "PlayerInfo",
@@ -211,11 +198,9 @@ __all__ = [
     "BalanceResultData",
     "BalanceResponse",
     "QualitySettings",
-    
     # Factory functions
     "create_player",
     "create_settings",
-    
     # Low-level C++ module (for advanced usage)
     "_core",
 ]

@@ -29,7 +29,7 @@ class TeamPlayer(BaseModel):
 class Team(BaseModel):
     """Команда"""
 
-    team_id: str = Field(description="ID команды")
+    team_id: UUID = Field(description="ID команды")
     players: list[TeamPlayer] = Field(default_factory=list)
 
     @property
@@ -60,7 +60,7 @@ class BalanceResult(BaseModel):
 
     @classmethod
     def create_teams(cls, num_teams: int = 2) -> list[Team]:
-        return [Team(team_id=f"team_{i + 1}", players=[]) for i in range(num_teams)]
+        return [Team(team_id=uuid_lib.uuid4(), players=[]) for i in range(num_teams)]
 
 
 class BalanceResultWithMeta(BaseModel):

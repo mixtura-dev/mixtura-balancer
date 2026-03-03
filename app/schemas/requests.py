@@ -22,11 +22,11 @@ class RoleSettingsRequest(BaseModel):
 class MathSettingsRequest(BaseModel):
     """Математические настройки"""
 
-    alpha: float = Field(default=1.0, ge=0)
-    beta: float = Field(default=1.0, ge=0)
-    gamma: float = Field(default=1.0, ge=0)
-    p: float = Field(default=2.0, ge=1)
-    q: float = Field(default=2.0, ge=1)
+    fairness_coef: float = Field(default=1.0, ge=0)
+    role_fairness_coef: float = Field(default=1.0, ge=0)
+    role_priority_coef: float = Field(default=1.0, ge=0)
+    fairness_power: float = Field(default=2.0, ge=1)
+    uniformity_power: float = Field(default=2.0, ge=1)
 
 
 class SettingsRequest(BaseModel):
