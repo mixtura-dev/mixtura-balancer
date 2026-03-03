@@ -66,6 +66,8 @@ PYBIND11_MODULE(_core, m)
             "Weight for role fairness metric")
         .def_readwrite("gamma", &QualitySettings::gamma,
             "Weight for role priority metric")
+        .def_readwrite("xi", &QualitySettings::xi,
+            "Weight for role priority imbalance penalty")
         .def_readwrite("p", &QualitySettings::p,
             "Power for fairness norm calculation")
         .def_readwrite("q", &QualitySettings::q,
@@ -335,7 +337,7 @@ PYBIND11_MODULE(_core, m)
         )doc");
 
     m.def("create_settings",
-        [](float alpha, float beta, float gamma, 
+        [](float alpha, float beta, float gamma, float xi,
            float p, float q, float g,
            int max_priority,
            const std::unordered_map<int, float>& role_weights) {
@@ -343,6 +345,7 @@ PYBIND11_MODULE(_core, m)
             s.alpha = alpha;
             s.beta = beta;
             s.gamma = gamma;
+            s.xi = xi;
             s.p = p;
             s.q = q;
             s.g = g;
@@ -353,6 +356,7 @@ PYBIND11_MODULE(_core, m)
         py::arg("alpha") = 1.0f,
         py::arg("beta") = 1.0f,
         py::arg("gamma") = 1.0f,
+        py::arg("xi") = 0.2f,
         py::arg("p") = 1.0f,
         py::arg("q") = 1.0f,
         py::arg("g") = 1.0f,

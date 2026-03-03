@@ -25,6 +25,7 @@ class MathSettings(BaseModel):
     alpha: float = Field(default=1.0, ge=0, description="Вес fairness")
     beta: float = Field(default=1.0, ge=0, description="Вес role fairness")
     gamma: float = Field(default=1.0, ge=0, description="Вес role priority")
+    xi: float = Field(default=0.2, ge=0, description="Вес штрафа за дисбаланс приоритетов")
     p: float = Field(default=2.0, ge=1, description="Степень для fairness")
     q: float = Field(default=2.0, ge=1, description="Степень для uniformity")
 

@@ -11,21 +11,21 @@ All input and output uses plain Python dataclasses from models.py.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
-import uuid
 
 from . import _core
 from .models import (
-    PlayerRoleInfo,
+    BalanceResponse,
+    BalanceResultData,
     PlayerInfo,
+    PlayerRoleInfo,
+    QualityMetrics,
+    QualitySettings,
     RoleConstraint,
     TeamPlayerResult,
     TeamResult,
-    QualityMetrics,
-    BalanceResultData,
-    BalanceResponse,
-    QualitySettings,
 )
 
 if TYPE_CHECKING:
@@ -142,6 +142,7 @@ class BalanceEngine:
         cpp_settings.alpha = settings.alpha
         cpp_settings.beta = settings.beta
         cpp_settings.gamma = settings.gamma
+        cpp_settings.xi = settings.xi
         cpp_settings.p = settings.p
         cpp_settings.q = settings.q
         cpp_settings.g = settings.g
@@ -397,6 +398,7 @@ async def async_find_balances(
     cpp_settings.alpha = settings.alpha
     cpp_settings.beta = settings.beta
     cpp_settings.gamma = settings.gamma
+    cpp_settings.xi = settings.xi
     cpp_settings.p = settings.p
     cpp_settings.q = settings.q
     cpp_settings.g = settings.g

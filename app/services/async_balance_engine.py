@@ -49,6 +49,7 @@ class AsyncBalanceEngine:
             quality_settings.alpha = settings.math.alpha
             quality_settings.beta = settings.math.beta
             quality_settings.gamma = settings.math.gamma
+            quality_settings.xi = settings.math.xi
             quality_settings.p = settings.math.p
             quality_settings.q = settings.math.q
             quality_settings.g = settings.math.p

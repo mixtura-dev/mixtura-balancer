@@ -56,6 +56,7 @@ struct QualitySettings {
     float alpha = 1.0f;
     float beta = 1.0f;
     float gamma = 1.0f;
+    float xi = 0.2f;
     float p = 1.0f;
     float q = 1.0f;
     float g = 1.0f;

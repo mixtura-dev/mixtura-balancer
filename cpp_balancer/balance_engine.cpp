@@ -201,7 +201,7 @@ float BalanceEngine::calc_role_points(
     
     int imbalance = std::abs(team1_points - team2_points);
     if (imbalance > 1) {
-        total_points += static_cast<int>(0.2f * imbalance);
+        total_points += static_cast<int>(settings_.xi * imbalance);
     }
     
     return settings_.gamma * total_points;

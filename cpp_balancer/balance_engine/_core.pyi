@@ -78,6 +78,9 @@ class QualitySettings:
     
     gamma: float
     """Weight for role priority metric."""
+
+    xi: float
+    """Weight for role priority imbalance penalty."""
     
     p: float
     """Power for fairness norm calculation."""

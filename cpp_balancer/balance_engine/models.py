@@ -7,9 +7,9 @@ The wrapper handles conversion to/from C++ types.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional
-import uuid
 
 
 @dataclass
@@ -41,6 +41,7 @@ class QualitySettings:
     alpha: float = 1.0      # Weight for fairness metric
     beta: float = 1.0       # Weight for role fairness metric
     gamma: float = 1.0      # Weight for role priority metric
+    xi: float = 0.2         # Weight for role priority imbalance penalty
     p: float = 1.0          # Power for fairness norm
     q: float = 1.0          # Power for uniformity norm
     g: float = 1.0          # Power for role fairness norm
