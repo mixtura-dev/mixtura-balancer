@@ -6,15 +6,22 @@
 BalanceEngine::BalanceEngine(
     const QualitySettings& settings,
     const std::vector<int>& role_ids,
-    const std::unordered_map<int, RoleConstraint>& constraints
-) : settings_(settings), role_ids_(role_ids), constraints_(constraints) {}
+    const std::unordered_map<int, RoleConstraint>& constraints,
+    int num_workers
+) : settings_(settings), role_ids_(role_ids), constraints_(constraints) {
+    if (num_workers <= 0) {
+        num_workers_ = static_cast<int>(std::thread::hardware_concurrency());
+        if (num_workers_ <= 0) num_workers_ = 4;  // fallback
+    } else {
+        num_workers_ = num_workers;
+    }
+}
 
 // ==================== Mask Generation ====================
 
 std::vector<std::vector<int>> BalanceEngine::generate_team_masks(int total, int team_size) {
     std::vector<std::vector<int>> masks;
     
-    // Use selector pattern for combination generation
     std::vector<bool> selector(total, false);
     std::fill(selector.begin(), selector.begin() + team_size, true);
     
@@ -36,7 +43,6 @@ void BalanceEngine::generate_role_masks(int team_size) {
     std::vector<int> current(team_size);
     std::vector<int> counts(num_roles, 0);
     
-    // Get max constraints for each role
     std::vector<int> max_per_role(num_roles, team_size);
     std::vector<int> min_per_role(num_roles, 0);
     
@@ -48,10 +54,8 @@ void BalanceEngine::generate_role_masks(int team_size) {
         }
     }
     
-    // Recursive generation with constraint checking
     std::function<void(int)> generate = [&](int pos) {
         if (pos == team_size) {
-            // Verify minimum requirements
             for (int i = 0; i < num_roles; ++i) {
                 if (counts[i] < min_per_role[i]) return;
             }
@@ -72,16 +76,13 @@ void BalanceEngine::generate_role_masks(int team_size) {
     generate(0);
 }
 
-// ==================== Validation (KEY OPTIMIZATION) ====================
+// ==================== Validation ====================
 
 bool BalanceEngine::is_mask_valid(
     const std::vector<const PlayerInfo*>& team,
     const std::vector<int>& mask
 ) const {
-    // Simple O(n) check - no backtracking!
-    // Position i in mask directly maps to player i
     for (size_t i = 0; i < team.size(); ++i) {
-        
         int role_id = role_ids_[mask[i]];
         if (!team[i]->can_play_role(role_id)) {
             return false;
@@ -90,15 +91,14 @@ bool BalanceEngine::is_mask_valid(
     return true;
 }
 
-// ==================== Direct Assignment (KEY OPTIMIZATION) ====================
+// ==================== Direct Assignment ====================
 
 void BalanceEngine::apply_mask(
     const std::vector<const PlayerInfo*>& team,
     const std::vector<int>& mask,
     std::vector<int>& ratings,
     std::vector<int>& actual_role_ids
-) {
-    // O(n) direct assignment - mask[i] tells us exactly which role player i gets
+) const {
     for (size_t i = 0; i < team.size(); ++i) {
         int role_id = role_ids_[mask[i]];
         actual_role_ids[i] = role_id;
@@ -199,7 +199,6 @@ float BalanceEngine::calc_role_points(
         team2_points -= pts;
     }
     
-    // Penalty for team imbalance
     int imbalance = std::abs(team1_points - team2_points);
     if (imbalance > 1) {
         total_points += static_cast<int>(0.2f * imbalance);
@@ -219,7 +218,121 @@ std::string BalanceEngine::mask_to_string(const std::vector<int>& mask) {
     return result;
 }
 
-// ==================== Main Algorithm ====================
+// ==================== Worker Function ====================
+// Каждый воркер обрабатывает свой slice team_masks[begin_idx..end_idx)
+// Полностью независимо, без блокировок, пишет только в свой WorkerContext
+
+void BalanceEngine::worker_process(
+    WorkerContext& ctx,
+    const std::vector<PlayerInfo>& players,
+    const std::vector<std::vector<int>>& team_masks,
+    size_t begin_idx,
+    size_t end_idx,
+    int team_size,
+    float balance_limit
+) {
+    for (size_t tm_idx = begin_idx; tm_idx < end_idx; ++tm_idx) {
+        const auto& team_mask = team_masks[tm_idx];
+        
+        // Split players into teams
+        int idx1 = 0, idx2 = 0;
+        for (size_t i = 0; i < team_mask.size(); ++i) {
+            if (team_mask[i] == 0) {
+                ctx.team1_buf.players[idx1++] = &players[i];
+            } else {
+                ctx.team2_buf.players[idx2++] = &players[i];
+            }
+        }
+        
+        // Pre-filter valid role masks for each team
+        ctx.valid_masks1.clear();
+        ctx.valid_masks2.clear();
+        
+        for (const auto& role_mask : role_masks_) {
+            if (is_mask_valid(ctx.team1_buf.players, role_mask)) {
+                ctx.valid_masks1.push_back(&role_mask);
+            }
+            if (is_mask_valid(ctx.team2_buf.players, role_mask)) {
+                ctx.valid_masks2.push_back(&role_mask);
+            }
+        }
+        
+        if (!ctx.valid_masks1.empty() && !ctx.valid_masks2.empty()) {
+            ctx.any_mask_valid = true;
+        } else {
+            continue;
+        }
+        
+        // Iterate valid combinations
+        for (const auto* mask1_ptr : ctx.valid_masks1) {
+            const auto& mask1 = *mask1_ptr;
+            
+            apply_mask(ctx.team1_buf.players, mask1,
+                      ctx.team1_buf.ratings, ctx.team1_buf.actual_role_ids);
+            
+            for (const auto* mask2_ptr : ctx.valid_masks2) {
+                const auto& mask2 = *mask2_ptr;
+                
+                apply_mask(ctx.team2_buf.players, mask2,
+                          ctx.team2_buf.ratings, ctx.team2_buf.actual_role_ids);
+                
+                // Calculate quality
+                QualityMetrics quality;
+                quality.fairness = calc_fairness(
+                    ctx.team1_buf.ratings, ctx.team2_buf.ratings);
+                quality.role_fairness = calc_role_fairness(
+                    ctx.team1_buf.ratings, ctx.team2_buf.ratings, mask1, mask2);
+                quality.role_points = calc_role_points(
+                    ctx.team1_buf.players, ctx.team2_buf.players,
+                    ctx.team1_buf.actual_role_ids, ctx.team2_buf.actual_role_ids);
+                quality.uniformity = calc_uniformity(
+                    ctx.team1_buf.ratings, ctx.team2_buf.ratings);
+                
+                float total = quality.total();
+                
+                if (total > balance_limit) {
+                    continue;
+                }
+                
+                ctx.any_balance_valid = true;
+                
+                // Build result
+                BalanceResultData result;
+                result.quality = quality;
+                result.team_mask = mask_to_string(team_mask);
+                result.role_mask1 = mask_to_string(mask1);
+                result.role_mask2 = mask_to_string(mask2);
+                
+                TeamResult team1_result;
+                team1_result.name = "team_1";
+                team1_result.players.reserve(team_size);
+                for (int i = 0; i < team_size; ++i) {
+                    team1_result.players.push_back({
+                        ctx.team1_buf.players[i]->member_id,
+                        ctx.team1_buf.actual_role_ids[i],
+                        ctx.team1_buf.ratings[i]
+                    });
+                }
+                
+                TeamResult team2_result;
+                team2_result.name = "team_2";
+                team2_result.players.reserve(team_size);
+                for (int i = 0; i < team_size; ++i) {
+                    team2_result.players.push_back({
+                        ctx.team2_buf.players[i]->member_id,
+                        ctx.team2_buf.actual_role_ids[i],
+                        ctx.team2_buf.ratings[i]
+                    });
+                }
+                
+                result.teams = {std::move(team1_result), std::move(team2_result)};
+                ctx.local_results.push_back(std::move(result));
+            }
+        }
+    }
+}
+
+// ==================== Main Algorithm (Parallel) ====================
 
 BalanceResponse BalanceEngine::find_balances(
     const std::vector<PlayerInfo>& players,
@@ -236,7 +349,7 @@ BalanceResponse BalanceEngine::find_balances(
         return response;
     }
     
-    // Pre-generate masks (done once)
+    // Pre-generate masks (done once, before threading)
     auto team_masks = generate_team_masks(players.size(), team_size);
     generate_role_masks(team_size);
     
@@ -246,118 +359,76 @@ BalanceResponse BalanceEngine::find_balances(
         return response;
     }
     
-    // Pre-allocate reusable buffers
-    team1_buf_.resize(team_size);
-    team2_buf_.resize(team_size);
-    valid_masks1_.reserve(role_masks_.size());
-    valid_masks2_.reserve(role_masks_.size());
+    // ========== Determine actual worker count ==========
+    size_t total_masks = team_masks.size();
+    int actual_workers = std::min(
+        num_workers_,
+        static_cast<int>(total_masks)
+    );
     
+    // Для тривиальных случаев — однопоточно
+    if (actual_workers <= 1) {
+        actual_workers = 1;
+    }
+    
+    // ========== Create per-worker contexts ==========
+    std::vector<WorkerContext> contexts(actual_workers);
+    for (auto& ctx : contexts) {
+        ctx.init(team_size, role_masks_.size());
+    }
+    
+    // ========== Partition team_masks across workers ==========
+    // Равномерное распределение: chunk_size + remainder в последний воркер
+    size_t chunk_size = total_masks / actual_workers;
+    size_t remainder = total_masks % actual_workers;
+    
+    // ========== Launch worker threads ==========
+    std::vector<std::thread> threads;
+    threads.reserve(actual_workers - 1);
+    
+    size_t offset = 0;
+    for (int w = 0; w < actual_workers; ++w) {
+        // Распределяем remainder по первым воркерам (по 1 extra)
+        size_t this_chunk = chunk_size + (w < static_cast<int>(remainder) ? 1 : 0);
+        size_t begin_idx = offset;
+        size_t end_idx = offset + this_chunk;
+        offset = end_idx;
+        
+        if (w < actual_workers - 1) {
+            // Запускаем в отдельном потоке
+            threads.emplace_back(
+                &BalanceEngine::worker_process, this,
+                std::ref(contexts[w]),
+                std::cref(players),
+                std::cref(team_masks),
+                begin_idx, end_idx,
+                team_size, balance_limit
+            );
+        } else {
+            // Последний chunk — в текущем потоке (избегаем лишний thread)
+            worker_process(
+                contexts[w], players, team_masks,
+                begin_idx, end_idx,
+                team_size, balance_limit
+            );
+        }
+    }
+    
+    // ========== Join all threads ==========
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    // ========== Merge results ==========
     bool any_mask_valid = false;
     bool any_balance_valid = false;
     
-    // Main search loop
-    for (const auto& team_mask : team_masks) {
-        // Split players into teams using pointers (no copying!)
-        int idx1 = 0, idx2 = 0;
-        for (size_t i = 0; i < team_mask.size(); ++i) {
-            if (team_mask[i] == 0) {
-                team1_buf_.players[idx1++] = &players[i];
-            } else {
-                team2_buf_.players[idx2++] = &players[i];
-            }
-        }
-        
-        // ========== KEY OPTIMIZATION: Pre-filter valid masks ==========
-        valid_masks1_.clear();
-        valid_masks2_.clear();
-        
-        for (const auto& role_mask : role_masks_) {
-            if (is_mask_valid(team1_buf_.players, role_mask)) {
-                valid_masks1_.push_back(&role_mask);
-            }
-            if (is_mask_valid(team2_buf_.players, role_mask)) {
-                valid_masks2_.push_back(&role_mask);
-            }
-        }
-        
-        // Track errors
-        if (!valid_masks1_.empty() && !valid_masks2_.empty()) {
-            any_mask_valid = true;
-        } else {
-            continue;  // Skip this team split
-        }
-        
-        // ========== Only iterate valid combinations ==========
-        for (const auto* mask1_ptr : valid_masks1_) {
-            const auto& mask1 = *mask1_ptr;
-            
-            // Direct O(n) assignment for team 1
-            apply_mask(team1_buf_.players, mask1, 
-                      team1_buf_.ratings, team1_buf_.actual_role_ids);
-            
-            for (const auto* mask2_ptr : valid_masks2_) {
-                const auto& mask2 = *mask2_ptr;
-                
-                // Direct O(n) assignment for team 2
-                apply_mask(team2_buf_.players, mask2,
-                          team2_buf_.ratings, team2_buf_.actual_role_ids);
-                
-                // Calculate quality metrics
-                QualityMetrics quality;
-                quality.fairness = calc_fairness(
-                    team1_buf_.ratings, team2_buf_.ratings);
-                quality.role_fairness = calc_role_fairness(
-                    team1_buf_.ratings, team2_buf_.ratings, mask1, mask2);
-                quality.role_points = calc_role_points(
-                    team1_buf_.players, team2_buf_.players,
-                    team1_buf_.actual_role_ids, team2_buf_.actual_role_ids);
-                quality.uniformity = calc_uniformity(
-                    team1_buf_.ratings, team2_buf_.ratings);
-                
-                float total = quality.total();
-                
-                // Early exit if over limit
-                if (total > balance_limit) {
-                    continue;
-                }
-                
-                any_balance_valid = true;
-                
-                // Build result (only for valid balances)
-                BalanceResultData result;
-                result.quality = quality;
-                result.team_mask = mask_to_string(team_mask);
-                result.role_mask1 = mask_to_string(mask1);
-                result.role_mask2 = mask_to_string(mask2);
-                
-                // Team 1
-                TeamResult team1_result;
-                team1_result.name = "team_1";
-                team1_result.players.reserve(team_size);
-                for (int i = 0; i < team_size; ++i) {
-                    team1_result.players.push_back({
-                        team1_buf_.players[i]->member_id,
-                        team1_buf_.actual_role_ids[i],
-                        team1_buf_.ratings[i]
-                    });
-                }
-                
-                // Team 2
-                TeamResult team2_result;
-                team2_result.name = "team_2";
-                team2_result.players.reserve(team_size);
-                for (int i = 0; i < team_size; ++i) {
-                    team2_result.players.push_back({
-                        team2_buf_.players[i]->member_id,
-                        team2_buf_.actual_role_ids[i],
-                        team2_buf_.ratings[i]
-                    });
-                }
-                
-                result.teams = {std::move(team1_result), std::move(team2_result)};
-                response.balances.push_back(std::move(result));
-            }
-        }
+    // Подсчитаем общий размер для pre-allocation
+    size_t total_results = 0;
+    for (const auto& ctx : contexts) {
+        total_results += ctx.local_results.size();
+        any_mask_valid |= ctx.any_mask_valid;
+        any_balance_valid |= ctx.any_balance_valid;
     }
     
     // Handle errors
@@ -373,14 +444,36 @@ BalanceResponse BalanceEngine::find_balances(
         return response;
     }
     
-    // Sort by quality and limit results
-    std::sort(response.balances.begin(), response.balances.end(),
-              [](const BalanceResultData& a, const BalanceResultData& b) {
-                  return a.quality.total() < b.quality.total();
-              });
+    // Merge all local results into response
+    response.balances.reserve(total_results);
+    for (auto& ctx : contexts) {
+        // Move-append из каждого воркера
+        response.balances.insert(
+            response.balances.end(),
+            std::make_move_iterator(ctx.local_results.begin()),
+            std::make_move_iterator(ctx.local_results.end())
+        );
+    }
     
+    // ========== Sort by quality and limit ==========
+    // Для очень большого числа результатов — partial_sort эффективнее
     if (static_cast<int>(response.balances.size()) > max_results) {
+        std::partial_sort(
+            response.balances.begin(),
+            response.balances.begin() + max_results,
+            response.balances.end(),
+            [](const BalanceResultData& a, const BalanceResultData& b) {
+                return a.quality.total() < b.quality.total();
+            }
+        );
         response.balances.resize(max_results);
+    } else {
+        std::sort(
+            response.balances.begin(), response.balances.end(),
+            [](const BalanceResultData& a, const BalanceResultData& b) {
+                return a.quality.total() < b.quality.total();
+            }
+        );
     }
     
     return response;

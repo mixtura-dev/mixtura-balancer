@@ -6,16 +6,16 @@ import uuid as uuid_lib
 class QualityMetrics(BaseModel):
     """Метрики качества баланса"""
 
-    evaluation: float = Field(ge=0, description="Общая оценка")
     uniformity: float = Field(ge=0, description="Равномерность распределения")
     fairness: float = Field(ge=0, description="Честность баланса")
     role_points: float = Field(ge=0, description="Очки ролей")
+    role_fairness: float = Field(ge=0, description="Справедливость по ролям")
 
     @computed_field
     @property
     def total_score(self) -> float:
         """Итоговый балл (меньше = лучше)"""
-        return self.evaluation + self.uniformity + self.fairness + self.role_points
+        return self.role_fairness + self.uniformity + self.fairness + self.role_points
 
 
 class TeamPlayer(BaseModel):

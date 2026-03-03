@@ -52,7 +52,7 @@ class AsyncBalanceEngine:
             quality_settings.p = settings.math.p
             quality_settings.q = settings.math.q
             quality_settings.g = settings.math.p
-            quality_settings.max_priority = 5  # Default max priority
+            quality_settings.max_priority = 3  # Default max priority
 
             # Convert Python objects to C++ structures (UUID conversion is automatic)
             players_for_engine = self._convert_players_to_cpp(players)
@@ -141,9 +141,9 @@ class AsyncBalanceEngine:
             teams.append(team)
 
         quality = QualityMetrics(
-            evaluation=result.quality.evaluation,
             uniformity=result.quality.uniformity,
             fairness=result.quality.fairness,
+            role_fairness=result.quality.role_fairness,
             role_points=result.quality.role_points,
         )
 
