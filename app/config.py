@@ -1,9 +1,11 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     """Конфигурация приложения"""
+
+    model_config = SettingsConfigDict(env_prefix="BALANCE_", env_file=".env")
 
     # Redis
     redis_host: str = "localhost"
@@ -36,10 +38,6 @@ class Settings(BaseSettings):
     default_gamma: float = 1.0
     default_p: float = 2.0
     default_q: float = 2.0
-
-    class Config:
-        env_file = ".env"
-        env_prefix = "BALANCE_"
 
 
 @lru_cache
