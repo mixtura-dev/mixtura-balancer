@@ -20,8 +20,7 @@ classifiers = [
 dependencies = [
     "balance-engine",
     "faststream[rabbit]>=0.6.7",
-    "pydantic-settings>=2.13.1",
-    "redis>=7.2.1",
+    "pydantic-settings>=2.13.1"
 ]
 
 [project.urls]

@@ -3,34 +3,31 @@ Async Python wrapper for C++ balance engine.
 Provides awaitable interface for balance calculation without blocking the event loop.
 """
 
+import datetime
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import balance_engine
 
-from app.models.balance import BalanceResult, QualityMetrics, Team, TeamPlayer
-from app.models.player import Player
-from app.models.settings import BalanceSettings
+from .models.balance import Balance, DraftBalances, QualityMetrics, Team, TeamPlayer
+from .models.balance_request import BalanceRequest, BalanceSettings, Player
 
 logger = logging.getLogger(__name__)
 
 
 class AsyncBalanceEngine:
-    async def find_balances_async(
-        self, players: list[Player], settings: BalanceSettings
-    ) -> list[BalanceResult]:
-        """
-        Synchronous wrapper for C++ balance engine.
-        This runs in a thread pool executor.
-        Uses high-level wrapper API with automatic UUID handling.
-        """
+    async def find_balances_async(self, balance_request: BalanceRequest) -> DraftBalances:
         try:
+            players = balance_request.players
+            settings = balance_request.balance_settings
             # Set quality settings in C++ engine
             quality_settings = balance_engine.QualitySettings()
             quality_settings.fairness_coef = settings.math.fairness_coef
             quality_settings.role_fairness_coef = settings.math.role_fairness_coef
             quality_settings.role_priority_coef = settings.math.role_priority_coef
-            quality_settings.imbalance_role_priority_coef = settings.math.role_priority_imbalance_coef
+            quality_settings.imbalance_role_priority_coef = (
+                settings.math.role_priority_imbalance_coef
+            )
             quality_settings.fairness_power = settings.math.fairness_power_coef
             quality_settings.uniformity_power = settings.math.uniformity_power_coef
             quality_settings.role_fairness_power = settings.math.fairness_power_coef
@@ -38,7 +35,7 @@ class AsyncBalanceEngine:
 
             # Convert Python objects to C++ structures (UUID conversion is automatic)
             players_for_engine = self._convert_players_to_cpp(players)
-            role_ids = settings.get_role_ids_ordered()
+            role_ids = list(settings.roles.keys())
             role_constraints = self._convert_constraints_to_cpp(settings)
 
             # Call C++ engine with wrapped API (handles UUID automatically)
@@ -48,13 +45,16 @@ class AsyncBalanceEngine:
                 role_constraints,
                 settings.max_in_team,
                 settings.balance_limit,
-                quality_settings=quality_settings
+                quality_settings=quality_settings,
             )
 
             # Convert wrapper result to Python BalanceResult (UUID already handled)
             balance_result = [self._convert_result_to_python(r) for r in result]
-
-            return balance_result
+            return DraftBalances(
+                draft_id=balance_request.draft_id,
+                balances=balance_result,
+                created_at=datetime.datetime.now(),
+            )
 
         except Exception as e:
             logger.error(f"Error in C++ balance engine: {e}")
@@ -62,10 +62,6 @@ class AsyncBalanceEngine:
 
     @staticmethod
     def _convert_players_to_cpp(players: list[Player]) -> list[balance_engine.PlayerInfo]:
-        """
-        Convert Python Player objects to wrapped PlayerInfo structures.
-        UUID conversion happens automatically in the wrapper.
-        """
         wrapped_players: list[balance_engine.PlayerInfo] = []
 
         for player in players:
@@ -89,7 +85,6 @@ class AsyncBalanceEngine:
     def _convert_constraints_to_cpp(
         settings: BalanceSettings,
     ) -> dict[UUID, balance_engine.RoleConstraint]:
-        """Convert BalanceSettings role constraints to wrapped RoleConstraint"""
         constraints = {}
 
         for id, role_settings in settings.roles.items():
@@ -101,11 +96,7 @@ class AsyncBalanceEngine:
         return constraints
 
     @staticmethod
-    def _convert_result_to_python(result: balance_engine.BalanceResultData) -> BalanceResult:
-        """
-        Convert wrapped BalanceResultData to Python BalanceResult.
-        UUID values are already Python UUIDs from the wrapper properties.
-        """
+    def _convert_result_to_python(result: balance_engine.BalanceResultData) -> Balance:
         teams = []
 
         for wrapped_team in result.teams:
@@ -119,7 +110,7 @@ class AsyncBalanceEngine:
                 )
                 team_players.append(team_player)
 
-            team = Team(team_id=wrapped_team.team_id, players=team_players)
+            team = Team(id=wrapped_team.team_id, players=team_players)
             teams.append(team)
 
         quality = QualityMetrics(
@@ -129,7 +120,7 @@ class AsyncBalanceEngine:
             role_points=result.quality.role_points,
         )
 
-        return BalanceResult(quality=quality, teams=teams)
+        return Balance(quality=quality, teams=teams, id=uuid4())
 
 
 # Singleton instance for convenience

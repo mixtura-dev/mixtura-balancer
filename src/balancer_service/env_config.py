@@ -1,20 +1,9 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LocalSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
-
-class RedisConfig(LocalSettings):
-    host: str = Field(default="localhost", alias="REDIS_HOST")
-    port: int = Field(default=6379, alias="REDIS_PORT")
-    user: str = Field(default="default", alias="REDIS_USER")
-    password: str = Field(default="", alias="REDIS_PASSWORD")
-
-    @property
-    def url(self) -> str:
-        return f"redis://{self.user}:{self.password}@{self.host}:{self.port}"
-
 
 
 class RabbitConfig(LocalSettings):
@@ -30,11 +19,11 @@ class RabbitConfig(LocalSettings):
 
 
 class Env(LocalSettings):
-    redis: RedisConfig = Field(default_factory=RedisConfig)  # type: ignore
     rabbit: RabbitConfig = Field(default_factory=RabbitConfig)  # type: ignore
 
     @classmethod
     def load(cls) -> "Env":
         return cls()
+
 
 env = Env.load()

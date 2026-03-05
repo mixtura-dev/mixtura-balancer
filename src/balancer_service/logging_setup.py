@@ -1,21 +1,21 @@
 import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 import sys
 import traceback
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-LOG_FILE_PATH = Path('.local') / 'temp.log'
+LOG_FILE_PATH = Path(".local") / "temp.log"
 
-_DEF_FORMAT = '[%(asctime)s] %(levelname)s %(name)s:%(lineno)d %(message)s'
-_DEF_DATEFMT = '%Y-%m-%d %H:%M:%S'
+_DEF_FORMAT = "[%(asctime)s] %(levelname)s %(name)s:%(lineno)d %(message)s"
+_DEF_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 _configured = False
 
 
 def _log_unhandled_exception(exc_type, exc_value, exc_tb):
-    logger = logging.getLogger('UNCAUGHT')
-    formatted_tb = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
-    logger.error('Uncaught exception with traceback:\n%s', formatted_tb)
+    logger = logging.getLogger("UNCAUGHT")
+    formatted_tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    logger.error("Uncaught exception with traceback:\n%s", formatted_tb)
 
 
 def setup_logging(level: int = logging.INFO):
@@ -39,7 +39,9 @@ def setup_logging(level: int = logging.INFO):
     ch.setFormatter(formatter)
     root.addHandler(ch)
 
-    fh = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')
+    fh = RotatingFileHandler(
+        LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
     fh.setLevel(level)
     fh.setFormatter(formatter)
     root.addHandler(fh)
@@ -47,8 +49,8 @@ def setup_logging(level: int = logging.INFO):
     # Install global exception hook for traceback logging
     sys.excepthook = _log_unhandled_exception
 
-    logging.getLogger(__name__).info('Logging initialized. File=%s', LOG_FILE_PATH.resolve())
+    logging.getLogger(__name__).info("Logging initialized. File=%s", LOG_FILE_PATH.resolve())
     _configured = True
 
 
-__all__ = ['setup_logging', 'LOG_FILE_PATH']
+__all__ = ["setup_logging", "LOG_FILE_PATH"]
