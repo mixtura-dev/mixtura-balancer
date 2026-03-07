@@ -29,12 +29,11 @@ broker = RabbitBroker(
 
 router = RabbitRouter()
 
-router.subscriber("mix_balance_service.balance")
 
-
+@router.subscriber("mix_balance_service.balance")
 async def balance_handler(
     message: BalanceRequest, balance_engine: AsyncBalanceEngine = Depends(get_async_engine)
-) -> ResponseMessage[DraftBalances]:
+) -> ResponseMessage[DraftBalances | ErrorResponse]:
     logger.info(
         f"Received balance request for draft_id={message.draft_id} with {len(message.players)} players"
     )

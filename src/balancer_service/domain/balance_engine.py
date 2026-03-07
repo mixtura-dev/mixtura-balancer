@@ -9,6 +9,8 @@ from uuid import UUID, uuid4
 
 import balance_engine
 
+from ..app.exceptions import DomainException
+
 from .models.balance import Balance, DraftBalances, QualityMetrics, Team, TeamPlayer
 from .models.balance_request import BalanceRequest, BalanceSettings, Player
 
@@ -48,8 +50,13 @@ class AsyncBalanceEngine:
                 quality_settings=quality_settings,
             )
 
+            if result.result_code != 200:
+                logger.error(f"Balance engine error: {result.status}")
+                raise DomainException(result.result_code, result.status)
+
             # Convert wrapper result to Python BalanceResult (UUID already handled)
             balance_result = [self._convert_result_to_python(r) for r in result]
+
             return DraftBalances(
                 draft_id=balance_request.draft_id,
                 balances=balance_result,
