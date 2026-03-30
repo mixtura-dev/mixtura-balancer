@@ -1,14 +1,6 @@
-"""
-Пример клиента для сервиса балансировки команд.
-
-Демонстрирует отправку запроса на балансировку и получение результата
-через RabbitMQ используя FastStream.
-"""
-
 import asyncio
 import logging
 import uuid
-from datetime import datetime
 
 from faststream import FastStream
 from faststream.rabbit import RabbitBroker, RabbitQueue
@@ -16,11 +8,7 @@ from faststream.rabbit import RabbitBroker, RabbitQueue
 # Импортируем модели из сервиса
 from balancer_service.app.schemas import ErrorResponse, ResponseMessage
 from balancer_service.domain.models.balance import (
-    Balance,
     DraftBalances,
-    QualityMetrics,
-    Team,
-    TeamPlayer,
 )
 from balancer_service.domain.models.balance_request import (
     BalanceRequest,
@@ -52,18 +40,22 @@ class BalanceClient:
         """
         self.broker = RabbitBroker(broker_url)
         self.response_received = asyncio.Event()
-        self.response_data: ResponseMessage[DraftBalances  | ErrorResponse] | None = None
+        self.response_data: ResponseMessage[DraftBalances | ErrorResponse] | None = None
 
     async def start(self):
         """Запустить клиент и подписаться на ответы."""
         await self.broker.connect()
-        await self.broker.declare_queue(RabbitQueue(name="balance_response"))  # Объявляем очередь для ответов
+        await self.broker.declare_queue(
+            RabbitQueue(name="balance_response")
+        )  # Объявляем очередь для ответов
+
         # Подписываемся на очередь ответов
         @self.broker.subscriber("balance_response")
         async def handle_response(message: ResponseMessage[DraftBalances | ErrorResponse]):
-            logger.info(f"Получен ответ")
+            logger.info("Получен ответ")
             self.response_data = message
             self.response_received.set()
+
         self.app = FastStream(self.broker)
         await self.app.start()
 
@@ -71,7 +63,9 @@ class BalanceClient:
         """Остановить клиент."""
         await self.broker.stop()
 
-    async def send_balance_request(self, request: BalanceRequest) -> ResponseMessage[DraftBalances | ErrorResponse]:
+    async def send_balance_request(
+        self, request: BalanceRequest
+    ) -> ResponseMessage[DraftBalances | ErrorResponse]:
         """
         Отправить запрос на балансировку.
 
@@ -214,7 +208,9 @@ async def print_balance_results(result: ResponseMessage[DraftBalances | ErrorRes
 
     for balance_idx, balance in enumerate(draft.balances[:5], 1):
         logger.info(f"--- Вариант баланса #{balance_idx} (ID: {balance.id}) ---")
-        logger.info(f"Качество баланса:")
+        logger.info(
+            f"Качество баланса: {(balance.quality.fairness + balance.quality.role_fairness + balance.quality.role_points + balance.quality.uniformity):.2f}"
+        )
         logger.info(f"  - Справедливость: {balance.quality.fairness:.2f}")
         logger.info(f"  - Справедливость по ролям: {balance.quality.role_fairness:.2f}")
         logger.info(f"  - Очки ролей: {balance.quality.role_points:.2f}")
@@ -224,7 +220,9 @@ async def print_balance_results(result: ResponseMessage[DraftBalances | ErrorRes
             logger.info(f"  Команда {team_idx} (ID: {team.id}):")
             total_rating = 0
             for player in team.players:
-                logger.info(f"    - Player {player.member_id}: Role={player.game_role_id}, Rating={player.rating}")
+                logger.info(
+                    f"    - Player {player.member_id}: Role={player.game_role_id}, Rating={player.rating}"
+                )
                 total_rating += player.rating
             logger.info(f"  Общий рейтинг команды: {total_rating}")
 

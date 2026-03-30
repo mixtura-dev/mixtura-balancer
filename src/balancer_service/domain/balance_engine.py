@@ -1,8 +1,3 @@
-"""
-Async Python wrapper for C++ balance engine.
-Provides awaitable interface for balance calculation without blocking the event loop.
-"""
-
 import datetime
 import logging
 from uuid import UUID, uuid4
@@ -10,7 +5,6 @@ from uuid import UUID, uuid4
 import balance_engine
 
 from ..app.exceptions import DomainException
-
 from .models.balance import Balance, DraftBalances, QualityMetrics, Team, TeamPlayer
 from .models.balance_request import BalanceRequest, BalanceSettings, Player
 
