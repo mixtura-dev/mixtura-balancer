@@ -1,19 +1,17 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Установка зависимостей
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Копирование кода
-COPY app ./app
+COPY . .
 
-# Переменные окружения
-ENV PYTHONPATH=/app
-ENV BALANCE_REDIS_HOST=redis
-ENV BALANCE_REDIS_PORT=6379
+RUN pip install --upgrade pip
+RUN pip install uv
+RUN uv pip install --system --editable .
 
-EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
 
-CMD ["faststream", "run", "app.main:app",]
+CMD ["faststream", "run", "balancer_service.app.main:app"]
