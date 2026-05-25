@@ -63,7 +63,6 @@ class BalanceSettings:
 
 ```python
 class RoleSettings:
-    original_game_role: UUID    # Оригинальный ID роли в игре
     max_in_team: int            # Максимум игроков этой роли в команде
     min_in_team: int            # Минимум игроков этой роли в команде
 ```
@@ -175,7 +174,6 @@ request = BalanceRequest(
         max_in_team=3,
         roles={
             role_id: RoleSettings(
-                original_game_role=role_id,
                 min_in_team=1,
                 max_in_team=2
             )

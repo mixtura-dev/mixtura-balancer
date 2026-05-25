@@ -82,17 +82,14 @@ balance_settings = BalanceSettings(
     max_in_team=3,
     roles={
         role_dps: RoleSettings(
-            original_game_role=role_dps,
             min_in_team=1,
             max_in_team=2,
         ),
         role_support: RoleSettings(
-            original_game_role=role_support,
             min_in_team=1,
             max_in_team=1,
         ),
         role_tank: RoleSettings(
-            original_game_role=role_tank,
             min_in_team=1,
             max_in_team=1,
         ),

@@ -128,7 +128,6 @@ from .models.balance import Balance
 
 ```python
 class RoleSettings(BaseModel):
-    original_game_role: UUID = Field(description="Оригинальная роль в игре")
     max_in_team: int = Field(ge=0, description="Максимум игроков этой роли в команде")
     min_in_team: int = Field(ge=0, description="Минимум игроков этой роли в команде")
 

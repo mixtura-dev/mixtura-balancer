@@ -113,17 +113,14 @@ async def create_example_balance_request() -> BalanceRequest:
     # Настройки для ролей
     role_settings = {
         role_carry_id: RoleSettings(
-            original_game_role=role_carry_id,
             max_in_team=2,
             min_in_team=1,
         ),
         role_midlane_id: RoleSettings(
-            original_game_role=role_midlane_id,
             max_in_team=2,
             min_in_team=1,
         ),
         role_support_id: RoleSettings(
-            original_game_role=role_support_id,
             max_in_team=2,
             min_in_team=1,
         ),
